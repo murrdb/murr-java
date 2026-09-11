@@ -53,6 +53,14 @@ public final class Table {
         return client.getSchema(name);
     }
 
+    /**
+     * Drops the table and its data. The handle stays valid, but every call on it fails with
+     * {@link TableNotFoundException} until a table with this name is created again.
+     */
+    public CompletableFuture<Void> drop() {
+        return client.dropTable(name);
+    }
+
     /** Shorthand for {@link #fetch(FetchRequest)}. */
     public CompletableFuture<FetchResult> fetch(List<String> keys, List<String> columns) {
         return fetch(new FetchRequest(keys, columns));

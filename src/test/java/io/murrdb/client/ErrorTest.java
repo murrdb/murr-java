@@ -38,6 +38,13 @@ class ErrorTest extends MurrTest {
     }
 
     @Test
+    void dropMissingTable() {
+        TableNotFoundException e = assertThrows(TableNotFoundException.class,
+                () -> join(client.dropTable("no_such_table")));
+        assertEquals("no_such_table", e.table());
+    }
+
+    @Test
     void duplicateTable() {
         Table table = createTable("dup", SCHEMA);
         TableAlreadyExistsException e = assertThrows(TableAlreadyExistsException.class,

@@ -61,6 +61,11 @@ public final class MurrClient implements AutoCloseable {
         return send(new MurrRequest("PUT", tableUri(name, ""), JSON_HEADERS, schema.toJson()), r -> table(name));
     }
 
+    /** Drops a table and its data. Fails with {@link TableNotFoundException} if it does not exist. */
+    public CompletableFuture<Void> dropTable(String name) {
+        return send(new MurrRequest("DELETE", tableUri(name, ""), Map.of(), null), r -> null);
+    }
+
     /** Lists every table on the server with its schema. */
     public CompletableFuture<Map<String, TableSchema>> listTables() {
         return send(new MurrRequest("GET", endpoint.resolve("/api/v1/table"), Map.of(), null),

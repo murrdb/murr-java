@@ -9,7 +9,7 @@ columns for a list of keys. Async, HTTP, Arrow underneath. Java 21+.
 <dependency>
   <groupId>io.murrdb</groupId>
   <artifactId>murr-client</artifactId>
-  <version>0.2.1-1</version>
+  <version>0.2.2-1</version>
 </dependency>
 ```
 
@@ -27,10 +27,11 @@ On JDK 24+ also add `--sun-misc-unsafe-memory-access=allow`.
 
 The client version is the murrdb version it talks to, plus a client release number after the dash.
 murrdb makes no compatibility promises before 1.0, so pin the client to the server version you run.
-A client for 0.2.1 may break against 0.2.2.
+A client for 0.2.2 may break against 0.2.3.
 
 | murr-client | murrdb |
 |-------------|--------|
+| 0.2.2-1     | 0.2.2  |
 | 0.2.1-1     | 0.2.1  |
 
 ## Example
