@@ -37,6 +37,12 @@ jobs:
         if: matrix.start-native-server
         run: ${{ matrix.start-native-server }}
 
+      # Fails fast if the server did not outlive the step that started it.
+      - name: Check murr server is still up
+        if: matrix.start-native-server
+        shell: bash
+        run: curl -fsS "$MURR_ENDPOINT/health"
+
       - name: Build and test
         run: mvn -B verify
 

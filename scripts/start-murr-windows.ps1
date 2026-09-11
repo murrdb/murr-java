@@ -25,7 +25,9 @@ Invoke-WebRequest -UseBasicParsing -OutFile $bin `
 
 # murr keeps data in .\murr under its working directory. MURR_STORAGE_PATH would be the obvious
 # knob, but murr 0.2.2 fails to parse the storage config when only the path is set.
-$proc = Start-Process -FilePath $bin -WorkingDirectory $dir -NoNewWindow -PassThru `
+# Hidden window, not -NoNewWindow: a process attached to the step's console is killed when the
+# step ends, so the server would be gone before the tests run in the next step.
+$proc = Start-Process -FilePath $bin -WorkingDirectory $dir -WindowStyle Hidden -PassThru `
     -RedirectStandardOutput (Join-Path $dir 'murr.log') `
     -RedirectStandardError (Join-Path $dir 'murr.err.log')
 Write-Host "started murr (pid $($proc.Id)), logs in $dir"
