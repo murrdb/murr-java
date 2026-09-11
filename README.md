@@ -23,6 +23,16 @@ Arrow needs one JVM flag, otherwise the client fails on first use:
 
 On JDK 24+ also add `--sun-misc-unsafe-memory-access=allow`.
 
+## Compatibility
+
+The client version is the murrdb version it talks to, plus a client release number after the dash.
+murrdb makes no compatibility promises before 1.0, so pin the client to the server version you run.
+A client for 0.2.1 may break against 0.2.2.
+
+| murr-client | murrdb |
+|-------------|--------|
+| 0.2.1-1     | 0.2.1  |
+
 ## Example
 
 ```java
@@ -85,7 +95,6 @@ Scala: `IO.fromCompletableFuture(IO(table.fetch(...)))` works as is.
 - Build and test: `mvn verify`. Tests start a murr container, so Docker must be running.
 - Run one example: `mvn -q test -Dtest=ExamplesTest#quickStart`.
 - Different server image: `MURR_IMAGE=ghcr.io/murrdb/murr:0.3.0 mvn verify`.
-- Versioning: `<server>-<client>`, `0.2.1-1` is the first client for murr 0.2.1.
 
 ## License
 
