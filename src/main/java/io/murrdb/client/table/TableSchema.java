@@ -3,10 +3,15 @@ package io.murrdb.client.table;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.murrdb.client.internal.Json;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import org.apache.arrow.vector.types.pojo.ArrowType;
+import org.apache.arrow.vector.types.pojo.Field;
+import org.apache.arrow.vector.types.pojo.FieldType;
 import org.apache.arrow.vector.types.pojo.Schema;
 
 /**
@@ -30,10 +35,28 @@ public final class TableSchema {
 
     /**
      * Builds a schema from an Arrow schema, taking {@code keyColumn} as the key.
-     * Fails if the key field is not a non-nullable utf8 or a field type has no murr dtype. Not implemented yet.
+     * Fails with {@link IllegalArgumentException} if the key field is missing, nullable, not utf8, or a
+     * field type has no murr dtype.
      */
     public static TableSchema of(String keyColumn, Schema arrowSchema) {
-        throw new UnsupportedOperationException("not implemented");
+        Objects.requireNonNull(keyColumn, "keyColumn");
+        Objects.requireNonNull(arrowSchema, "arrowSchema");
+        Field keyField = arrowSchema.findField(keyColumn);
+        if (keyField == null) {
+            throw new IllegalArgumentException("no field " + keyColumn + " in " + arrowSchema);
+        }
+        if (!(keyField.getType() instanceof ArrowType.Utf8) || keyField.isNullable()) {
+            throw new IllegalArgumentException("key " + keyColumn + " must be non-nullable utf8, got " + keyField);
+        }
+        Builder b = builder().key(keyColumn);
+        for (Field f : arrowSchema.getFields()) {
+            if (f.getName().equals(keyColumn)) {
+                continue;
+            }
+            b.column(f.getName(), DType.fromArrowType(f.getType()),
+                    f.isNullable() ? Nullability.NULLABLE : Nullability.NOT_NULL);
+        }
+        return b.build();
     }
 
     /** Name of the key column. */
@@ -51,9 +74,14 @@ public final class TableSchema {
         return columns.get(name);
     }
 
-    /** The Arrow schema for record batches written to or read from this table. Not implemented yet. */
+    /** The Arrow schema for record batches written to this table, key column first. */
     public Schema toArrowSchema() {
-        throw new UnsupportedOperationException("not implemented");
+        List<Field> fields = new ArrayList<>(columns.size());
+        for (Map.Entry<String, ColumnSchema> e : columns.entrySet()) {
+            ColumnSchema c = e.getValue();
+            fields.add(new Field(e.getKey(), new FieldType(c.nullable(), c.dtype().toArrowType(), null), null));
+        }
+        return new Schema(fields);
     }
 
     /** The schema as the server expects it: {@code {"key":"id","columns":{"id":{"dtype":"utf8","nullable":false},...}}}. */

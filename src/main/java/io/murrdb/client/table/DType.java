@@ -1,5 +1,6 @@
 package io.murrdb.client.table;
 
+import org.apache.arrow.vector.types.FloatingPointPrecision;
 import org.apache.arrow.vector.types.pojo.ArrowType;
 
 /** Column types murr understands, named exactly as they appear on the wire. */
@@ -38,13 +39,36 @@ public enum DType {
         throw new IllegalArgumentException("unknown dtype: " + name);
     }
 
-    /** The Arrow type this dtype is sent as. Not implemented yet. */
+    /** The Arrow type this dtype is sent as. */
     public ArrowType toArrowType() {
-        throw new UnsupportedOperationException("not implemented");
+        return switch (this) {
+            case UTF8 -> ArrowType.Utf8.INSTANCE;
+            case BOOL -> ArrowType.Bool.INSTANCE;
+            case INT8 -> new ArrowType.Int(8, true);
+            case INT16 -> new ArrowType.Int(16, true);
+            case INT32 -> new ArrowType.Int(32, true);
+            case INT64 -> new ArrowType.Int(64, true);
+            case UINT8 -> new ArrowType.Int(8, false);
+            case UINT16 -> new ArrowType.Int(16, false);
+            case UINT32 -> new ArrowType.Int(32, false);
+            case UINT64 -> new ArrowType.Int(64, false);
+            case FLOAT32 -> new ArrowType.FloatingPoint(FloatingPointPrecision.SINGLE);
+            case FLOAT64 -> new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE);
+        };
     }
 
-    /** The dtype for an Arrow type, or {@link IllegalArgumentException} if murr has no equivalent. Not implemented yet. */
+    /** The dtype for an Arrow type, or {@link IllegalArgumentException} if murr has no equivalent. */
     public static DType fromArrowType(ArrowType type) {
-        throw new UnsupportedOperationException("not implemented");
+        return switch (type) {
+            case ArrowType.Utf8 u -> UTF8;
+            case ArrowType.Bool b -> BOOL;
+            case ArrowType.Int i when i.getBitWidth() == 8 -> i.getIsSigned() ? INT8 : UINT8;
+            case ArrowType.Int i when i.getBitWidth() == 16 -> i.getIsSigned() ? INT16 : UINT16;
+            case ArrowType.Int i when i.getBitWidth() == 32 -> i.getIsSigned() ? INT32 : UINT32;
+            case ArrowType.Int i when i.getBitWidth() == 64 -> i.getIsSigned() ? INT64 : UINT64;
+            case ArrowType.FloatingPoint f when f.getPrecision() == FloatingPointPrecision.SINGLE -> FLOAT32;
+            case ArrowType.FloatingPoint f when f.getPrecision() == FloatingPointPrecision.DOUBLE -> FLOAT64;
+            default -> throw new IllegalArgumentException("no murr dtype for " + type);
+        };
     }
 }

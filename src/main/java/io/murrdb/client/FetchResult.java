@@ -58,9 +58,17 @@ public final class FetchResult implements AutoCloseable {
         return keys;
     }
 
-    /** False if the server had no row for the key at {@code row}. Not implemented yet. */
+    /**
+     * False if the server had no row for the key at {@code row}. A missing key comes back as an all-null
+     * row, so a row that exists but is null in every requested column also reads as not found.
+     */
     public boolean found(int row) {
-        throw new UnsupportedOperationException("not implemented");
+        for (FieldVector v : root.getFieldVectors()) {
+            if (!v.isNull(row)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** Names of the columns in this result, in request order. The key column is never among them. */
