@@ -6,7 +6,7 @@
 
   <groupId>io.murrdb</groupId>
   <artifactId>murr-client</artifactId>
-  <version>0.1.0-SNAPSHOT</version>
+  <version>0.2.1-1</version>
   <packaging>jar</packaging>
 
   <name>murr-client</name>
@@ -18,6 +18,10 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <arrow.version>19.0.0</arrow.version>
     <checker.version>3.53.1</checker.version>
+    <junit.version>6.1.3</junit.version>
+    <testcontainers.version>2.0.5</testcontainers.version>
+    <slf4j.version>2.0.17</slf4j.version>
+    <surefire.argLine>--add-opens=java.base/java.nio=ALL-UNNAMED</surefire.argLine>
   </properties>
 
   <dependencies>
@@ -43,6 +47,24 @@
       <version>${checker.version}</version>
       <scope>provided</scope>
     </dependency>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <version>${junit.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>testcontainers-junit-jupiter</artifactId>
+      <version>${testcontainers.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>slf4j-simple</artifactId>
+      <version>${slf4j.version}</version>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
 
   <build>
@@ -57,6 +79,18 @@
             <arg>-Xlint:all</arg>
             <arg>-Werror</arg>
           </compilerArgs>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <version>3.6.0</version>
+        <configuration>
+          <useModulePath>false</useModulePath>
+          <argLine>${surefire.argLine}</argLine>
+          <systemPropertyVariables>
+            <murr.client.version>${project.version}</murr.client.version>
+          </systemPropertyVariables>
         </configuration>
       </plugin>
       <plugin>
@@ -79,4 +113,16 @@
       </plugin>
     </plugins>
   </build>
+
+  <profiles>
+    <profile>
+      <id>jdk24-unsafe</id>
+      <activation>
+        <jdk>[24,)</jdk>
+      </activation>
+      <properties>
+        <surefire.argLine>--add-opens=java.base/java.nio=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow</surefire.argLine>
+      </properties>
+    </profile>
+  </profiles>
 </project>
