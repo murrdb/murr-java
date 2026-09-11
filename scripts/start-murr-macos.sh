@@ -19,13 +19,15 @@ fi
 dir="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/murr"
 bin="$dir/murr"
 endpoint="http://127.0.0.1:8080"
-mkdir -p "$dir/data"
+mkdir -p "$dir"
 
 echo "downloading murr $version"
 curl -fsSL -o "$bin" "https://github.com/murrdb/murr/releases/download/v$version/murr-macos-arm64"
 chmod +x "$bin"
 
-MURR_STORAGE_PATH="$dir/data" "$bin" > "$dir/murr.log" 2>&1 &
+# murr keeps data in ./murr under its working directory. MURR_STORAGE_PATH would be the obvious
+# knob, but murr 0.2.2 fails to parse the storage config when only the path is set.
+(cd "$dir" && exec "$bin" > murr.log 2>&1) &
 echo "started murr (pid $!), logs in $dir/murr.log"
 
 for _ in $(seq 1 60); do

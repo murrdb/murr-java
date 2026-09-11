@@ -16,14 +16,15 @@ $tmp = if ($env:RUNNER_TEMP) { $env:RUNNER_TEMP } else { [System.IO.Path]::GetTe
 $dir = Join-Path $tmp 'murr'
 $bin = Join-Path $dir 'murr.exe'
 $endpoint = 'http://127.0.0.1:8080'
-New-Item -ItemType Directory -Force -Path (Join-Path $dir 'data') | Out-Null
+New-Item -ItemType Directory -Force -Path $dir | Out-Null
 
 Write-Host "downloading murr $version"
 Invoke-WebRequest -UseBasicParsing -OutFile $bin `
     -Uri "https://github.com/murrdb/murr/releases/download/v$version/murr-windows-x64.exe"
 
-$env:MURR_STORAGE_PATH = Join-Path $dir 'data'
-$proc = Start-Process -FilePath $bin -NoNewWindow -PassThru `
+# murr keeps data in .\murr under its working directory. MURR_STORAGE_PATH would be the obvious
+# knob, but murr 0.2.2 fails to parse the storage config when only the path is set.
+$proc = Start-Process -FilePath $bin -WorkingDirectory $dir -NoNewWindow -PassThru `
     -RedirectStandardOutput (Join-Path $dir 'murr.log') `
     -RedirectStandardError (Join-Path $dir 'murr.err.log')
 Write-Host "started murr (pid $($proc.Id)), logs in $dir"
