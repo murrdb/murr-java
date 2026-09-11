@@ -19,6 +19,8 @@ import org.apache.arrow.vector.VectorUnloader;
 import org.apache.arrow.vector.ipc.ArrowStreamReader;
 import org.apache.arrow.vector.ipc.ArrowStreamWriter;
 import org.apache.arrow.vector.ipc.message.ArrowRecordBatch;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * A handle to one table on the server. Creating a handle costs no round trip, and nothing checks the
@@ -26,6 +28,8 @@ import org.apache.arrow.vector.ipc.message.ArrowRecordBatch;
  */
 public final class Table {
 
+    private static final Logger LOG = LoggerFactory.getLogger(Table.class);
+    private static final int KEY_PREVIEW = 10;
     private static final String ARROW_MIME = "application/vnd.apache.arrow.stream";
     private static final Map<String, String> FETCH_HEADERS =
             Map.of("content-type", "application/json", "accept", ARROW_MIME);
@@ -61,6 +65,7 @@ public final class Table {
 
     /** Runs the fetch and hands ownership of the result to the caller, who must close it. */
     public CompletableFuture<FetchResult> fetch(FetchRequest request) {
+        LOG.trace("fetch {}: {} keys {}, columns {}", name, request.keys().size(), preview(request.keys()), request.columns());
         MurrRequest req = new MurrRequest("POST", client.tableUri(name, "/fetch"), FETCH_HEADERS, request.toJson());
         return client.send(req, r -> decode(r.body(), request.keys()));
     }
@@ -87,6 +92,7 @@ public final class Table {
      * The root is encoded before this returns and is neither closed nor changed.
      */
     public CompletableFuture<Void> write(VectorSchemaRoot root) {
+        LOG.trace("write {}: {} rows, fields {}", name, root.getRowCount(), root.getSchema().getFields());
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         try (ArrowStreamWriter writer = new ArrowStreamWriter(root, null, Channels.newChannel(out))) {
             writer.start();
@@ -125,6 +131,13 @@ public final class Table {
             closeQuietly(owned, allocator);
             throw e;
         }
+    }
+
+    private static String preview(List<String> keys) {
+        if (keys.size() <= KEY_PREVIEW) {
+            return keys.toString();
+        }
+        return keys.subList(0, KEY_PREVIEW) + " ... +" + (keys.size() - KEY_PREVIEW);
     }
 
     private static void closeQuietly(VectorSchemaRoot root, BufferAllocator allocator) {
