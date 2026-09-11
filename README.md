@@ -1,0 +1,90 @@
+# murr-java
+
+Java client for [murrdb](https://github.com/murrdb/murr): write batches of rows, fetch a few
+columns for a list of keys. Async, HTTP, Arrow underneath. Java 21+.
+
+## Install
+
+```xml
+<dependency>
+  <groupId>io.murrdb</groupId>
+  <artifactId>murr-client</artifactId>
+  <version>0.2.1-1</version>
+</dependency>
+```
+
+Not on Maven Central yet, so `mvn install` from a checkout for now.
+
+Arrow needs one JVM flag, otherwise the client fails on first use:
+
+```
+--add-opens=java.base/java.nio=ALL-UNNAMED
+```
+
+On JDK 24+ also add `--sun-misc-unsafe-memory-access=allow`.
+
+## Example
+
+```java
+var schema = TableSchema.builder()
+    .key("product_id")
+    .column("price", DType.FLOAT32, Nullability.NOT_NULL)
+    .column("category", DType.UTF8)
+    .build();
+
+try (var client = MurrClient.builder().endpoint("http://localhost:8080").build()) {
+  Table products = client.createTable("products", schema).join();
+
+  // one column per call, becomes one segment on the server
+  try (var batch = Batch.of(schema)
+      .utf8("product_id", List.of("p1", "p2", "p3"))
+      .float32("price", new float[] {19.99f, 5.5f, 120f})
+      .utf8("category", List.of("shoes", "socks", "jackets"))
+      .build(client.allocator())) {
+    products.write(batch).join();
+  }
+
+  // this overload closes the result for you after the lambda returns
+  products.fetch(List.of("p1", "p9"), List.of("price"), result -> {
+    for (int i = 0; i < result.rowCount(); i++) {
+      String key = result.keys().get(i);
+      // unknown keys come back as all-null rows
+      if (result.found(i)) {
+        System.out.println(key + " " + result.float32("price").get(i));
+      } else {
+        System.out.println(key + " missing");
+      }
+    }
+    return null;
+  }).join();
+}
+```
+
+```
+p1 19.99
+p9 missing
+```
+
+More in [`src/test/java/io/murrdb/examples`](src/test/java/io/murrdb/examples): writing an
+existing `VectorSchemaRoot`, and many fetches in flight on one client. They run as part of the
+test suite against a real server, so they do not rot.
+
+Scala: `IO.fromCompletableFuture(IO(table.fetch(...)))` works as is.
+
+## Not here
+
+- No embedded mode, you need a running server.
+- No Arrow Flight, HTTP only.
+- No blocking API. `join()` on a virtual thread is the blocking API.
+- No row-to-record mapping yet.
+
+## Development
+
+- Build and test: `mvn verify`. Tests start a murr container, so Docker must be running.
+- Run one example: `mvn -q test -Dtest=ExamplesTest#quickStart`.
+- Different server image: `MURR_IMAGE=ghcr.io/murrdb/murr:0.3.0 mvn verify`.
+- Versioning: `<server>-<client>`, `0.2.1-1` is the first client for murr 0.2.1.
+
+## License
+
+Apache 2.0
