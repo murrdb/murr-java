@@ -25,9 +25,7 @@ Invoke-WebRequest -UseBasicParsing -OutFile $bin `
 
 # murr keeps data in .\murr under its working directory. MURR_STORAGE_PATH would be the obvious
 # knob, but murr 0.2.2 fails to parse the storage config when only the path is set.
-# Hidden window, not -NoNewWindow: a process attached to the step's console is killed when the
-# step ends, so the server would be gone before the tests run in the next step.
-$proc = Start-Process -FilePath $bin -WorkingDirectory $dir -WindowStyle Hidden -PassThru `
+$proc = Start-Process -FilePath $bin -WorkingDirectory $dir -NoNewWindow -PassThru `
     -RedirectStandardOutput (Join-Path $dir 'murr.log') `
     -RedirectStandardError (Join-Path $dir 'murr.err.log')
 Write-Host "started murr (pid $($proc.Id)), logs in $dir"
@@ -36,18 +34,20 @@ for ($i = 0; $i -lt 60; $i++) {
     try {
         Invoke-WebRequest -UseBasicParsing -Uri "$endpoint/health" | Out-Null
         Write-Host "murr is up at $endpoint"
+        # The GitHub runner kills everything a step started when that step ends, so CI runs this
+        # script and mvn in the same step: set the endpoint for the calling session, not GITHUB_ENV.
+        $env:MURR_ENDPOINT = $endpoint
         if ($env:GITHUB_ENV) {
-            Add-Content -Path $env:GITHUB_ENV -Value "MURR_ENDPOINT=$endpoint"
             Add-Content -Path $env:GITHUB_ENV -Value "MURR_LOG_DIR=$dir"
         } else {
-            Write-Host "run tests with: `$env:MURR_ENDPOINT='$endpoint'; mvn verify"
+            Write-Host "MURR_ENDPOINT is set in this session, run tests with: mvn verify"
         }
-        exit 0
+        return
     } catch {
         Start-Sleep -Seconds 1
     }
 }
 
-Write-Error "murr did not become healthy in 60s" -ErrorAction Continue
 Get-Content (Join-Path $dir 'murr.log'), (Join-Path $dir 'murr.err.log') -ErrorAction SilentlyContinue
-exit 1
+# throw, not exit 1: the caller runs mvn next and must stop here
+throw "murr did not become healthy in 60s"
