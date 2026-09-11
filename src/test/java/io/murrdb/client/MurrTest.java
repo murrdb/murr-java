@@ -33,7 +33,7 @@ abstract class MurrTest {
         allocator.close();
     }
 
-    /** The server has no drop-table, so every test gets a fresh name. */
+    /** Tests share one server, so every test gets a fresh name. */
     static String uniqueTable(String prefix) {
         return prefix + "_" + System.nanoTime() + "_" + COUNTER.incrementAndGet();
     }

@@ -19,8 +19,8 @@ import java.util.List;
  * {@code found(row)} reports.
  *
  * <p>{@code mvn -q test -Dtest=ExamplesTest#quickStart} runs it against a fresh server in Docker. Pass
- * the URL as the first argument to use your own server; there is no drop-table yet, so a second run
- * against the same server fails with {@code TableAlreadyExistsException}. Expected output:
+ * the URL as the first argument to use your own server; the table is dropped at the end, so it can run
+ * again against the same server. Expected output:
  *
  * <pre>
  * p1: 19.99 shoes
@@ -61,6 +61,8 @@ public final class QuickStart {
                 }
                 return null;
             }).join();
+
+            products.drop().join();
         }
     }
 }

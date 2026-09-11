@@ -22,8 +22,8 @@ import java.util.stream.IntStream;
  * pattern maps onto {@code IO.fromCompletableFuture} or {@code Future.asScala} in Scala code.
  *
  * <p>{@code mvn -q test -Dtest=ExamplesTest#concurrentFetch} runs it against a fresh server in Docker.
- * Pass the URL as the first argument to use your own server; there is no drop-table yet, so a second
- * run against the same server fails with {@code TableAlreadyExistsException}. Expected output:
+ * Pass the URL as the first argument to use your own server; the table is dropped at the end, so it
+ * can run again against the same server. Expected output:
  *
  * <pre>
  * 20 fetches, 1000 users, total score 499500
@@ -64,6 +64,8 @@ public final class ConcurrentFetch {
             CompletableFuture.allOf(inFlight.toArray(new CompletableFuture<?>[0])).join();
             long total = inFlight.stream().mapToLong(CompletableFuture::join).sum();
             System.out.println(inFlight.size() + " fetches, " + users.size() + " users, total score " + total);
+
+            scores.drop().join();
         }
     }
 }

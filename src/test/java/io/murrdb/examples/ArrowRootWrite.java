@@ -25,8 +25,8 @@ import org.apache.arrow.vector.types.pojo.Schema;
  * the caller owns and must close; its {@code root()} can go straight into other Arrow code.
  *
  * <p>{@code mvn -q test -Dtest=ExamplesTest#arrowRootWrite} runs it against a fresh server in Docker.
- * Pass the URL as the first argument to use your own server; there is no drop-table yet, so a second
- * run against the same server fails with {@code TableAlreadyExistsException}. Expected output:
+ * Pass the URL as the first argument to use your own server; the table is dropped at the end, so it
+ * can run again against the same server. Expected output:
  *
  * <pre>
  * [d2, d1]
@@ -63,6 +63,8 @@ public final class ArrowRootWrite {
                 System.out.println(result.keys());
                 System.out.print(result.root().contentToTSVString());
             }
+
+            embeddings.drop().join();
         }
     }
 }
