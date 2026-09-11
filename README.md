@@ -65,9 +65,11 @@ p1 19.99
 p9 missing
 ```
 
-More in [`src/test/java/io/murrdb/examples`](src/test/java/io/murrdb/examples): writing an
-existing `VectorSchemaRoot`, and many fetches in flight on one client. They run as part of the
-test suite against a real server, so they do not rot.
+Complete programs, run by the test suite against a real server so they do not rot:
+
+- [`QuickStart.java`](src/test/java/io/murrdb/examples/QuickStart.java): the example above, with a second column and a not-found key.
+- [`ArrowRootWrite.java`](src/test/java/io/murrdb/examples/ArrowRootWrite.java): write a `VectorSchemaRoot` you already have, read back the raw Arrow root.
+- [`ConcurrentFetch.java`](src/test/java/io/murrdb/examples/ConcurrentFetch.java): twenty fetches in flight on one client, joined with `allOf`.
 
 Scala: `IO.fromCompletableFuture(IO(table.fetch(...)))` works as is.
 
