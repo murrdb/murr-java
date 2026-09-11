@@ -1,6 +1,7 @@
 package io.murrdb.client;
 
 import java.net.URI;
+import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.output.Slf4jLogConsumer;
@@ -9,17 +10,29 @@ import org.testcontainers.utility.DockerImageName;
 
 /**
  * One murr server for the whole test JVM. The image tag follows the client version: {@code 0.2.2-1}
- * tests against {@code murr:0.2.2}. Set {@code MURR_IMAGE} to point at another image.
+ * tests against {@code murr:0.2.2}. Set {@code MURR_IMAGE} to point at another image, or
+ * {@code MURR_ENDPOINT} to skip the container and use a server that is already running.
  */
 final class MurrContainer {
 
+    private static final Logger LOG = LoggerFactory.getLogger(MurrContainer.class);
     private static final int HTTP_PORT = 8080;
-    private static final GenericContainer<?> CONTAINER = start();
+    private static final URI ENDPOINT = resolve();
 
     private MurrContainer() {}
 
     static URI endpoint() {
-        return URI.create("http://" + CONTAINER.getHost() + ":" + CONTAINER.getMappedPort(HTTP_PORT));
+        return ENDPOINT;
+    }
+
+    private static URI resolve() {
+        String override = System.getenv("MURR_ENDPOINT");
+        if (override != null && !override.isBlank()) {
+            LOG.info("MURR_ENDPOINT is set, testing against {} instead of a container", override);
+            return URI.create(override);
+        }
+        GenericContainer<?> container = start();
+        return URI.create("http://" + container.getHost() + ":" + container.getMappedPort(HTTP_PORT));
     }
 
     private static GenericContainer<?> start() {

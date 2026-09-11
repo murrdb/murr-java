@@ -96,6 +96,7 @@ Scala: `IO.fromCompletableFuture(IO(table.fetch(...)))` works as is.
 - Build and test: `mvn verify`. Tests start a murr container, so Docker must be running.
 - Run one example: `mvn -q test -Dtest=ExamplesTest#quickStart`.
 - Different server image: `MURR_IMAGE=ghcr.io/murrdb/murr:0.3.0 mvn verify`.
+- Without Docker: `scripts/start-murr-macos.sh` or `scripts/start-murr-windows.ps1` starts a native server, then `MURR_ENDPOINT=http://127.0.0.1:8080 mvn verify` runs the tests against it.
 
 ## License
 

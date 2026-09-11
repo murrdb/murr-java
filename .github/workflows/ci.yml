@@ -11,7 +11,18 @@ permissions:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux runs murr in a container through Testcontainers.
+          - os: ubuntu-latest
+          # macOS and Windows runners can't run Linux containers, so they use the native binary.
+          - os: macos-latest
+            start-native-server: ./scripts/start-murr-macos.sh
+          - os: windows-latest
+            start-native-server: ./scripts/start-murr-windows.ps1
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
 
@@ -21,5 +32,14 @@ jobs:
           java-version: 21
           cache: maven
 
+      - name: Start murr server
+        if: matrix.start-native-server
+        run: ${{ matrix.start-native-server }}
+
       - name: Build and test
         run: mvn -B verify
+
+      - name: Show murr server log
+        if: failure() && matrix.start-native-server
+        shell: bash
+        run: cat "$MURR_LOG_DIR"/*.log
