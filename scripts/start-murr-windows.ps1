@@ -7,7 +7,8 @@ Set-Location "$PSScriptRoot/.."
 
 $version = $env:MURR_VERSION
 if (-not $version) {
-    $client = mvn -B -q help:evaluate -Dexpression=project.version -DforceStdout
+    # quoted: PowerShell splits unquoted -Dfoo=a.b at the dot
+    $client = mvn -B -q help:evaluate "-Dexpression=project.version" "-DforceStdout"
     if ($LASTEXITCODE -ne 0) { throw "failed to read project version" }
     $version = $client.Trim() -replace '-SNAPSHOT$', '' -replace '-\d+$', ''
 }
