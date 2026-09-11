@@ -1,7 +1,9 @@
 package io.murrdb.client;
 
 import java.net.URI;
+import org.slf4j.LoggerFactory;
 import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.containers.output.Slf4jLogConsumer;
 import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.utility.DockerImageName;
 
@@ -23,6 +25,7 @@ final class MurrContainer {
     private static GenericContainer<?> start() {
         GenericContainer<?> container = new GenericContainer<>(DockerImageName.parse(image()))
                 .withExposedPorts(HTTP_PORT)
+                .withLogConsumer(new Slf4jLogConsumer(LoggerFactory.getLogger("murr")))
                 .waitingFor(Wait.forHttp("/health").forPort(HTTP_PORT));
         container.start();
         return container;
