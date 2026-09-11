@@ -6,6 +6,7 @@
 module io.murrdb.client {
     requires java.net.http;
     requires com.fasterxml.jackson.databind;
+    requires org.slf4j;
     requires transitive org.apache.arrow.vector;
     requires transitive org.apache.arrow.memory.core;
 

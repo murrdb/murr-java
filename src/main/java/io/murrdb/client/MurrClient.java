@@ -11,20 +11,26 @@ import java.time.Duration;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.memory.RootAllocator;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Entry point. One client per server, safe to share between threads. Every call returns a
  * {@code CompletableFuture} that completes on the client executor, never on the caller's thread.
  * Close it when done: that shuts the transport and frees the allocator the client created.
+ * Logs through SLF4J under {@code io.murrdb.client}: one debug line per request, nothing at info.
  */
 public final class MurrClient implements AutoCloseable {
 
+    private static final Logger LOG = LoggerFactory.getLogger(MurrClient.class);
     private static final Map<String, String> JSON_HEADERS = Map.of("content-type", "application/json");
 
     private final URI endpoint;
@@ -41,6 +47,7 @@ public final class MurrClient implements AutoCloseable {
         this.ownedExecutor = b.executor == null ? Executors.newVirtualThreadPerTaskExecutor() : null;
         this.executor = ownedExecutor != null ? ownedExecutor : b.executor;
         this.transport = b.transport != null ? b.transport : new JdkHttpTransport(executor, b.requestTimeout);
+        LOG.debug("client created for {}", endpoint);
     }
 
     /** Starts configuring a client. Only {@link Builder#endpoint} is required. */
@@ -102,8 +109,13 @@ public final class MurrClient implements AutoCloseable {
             ownedExecutor.close();
         }
         if (ownsAllocator) {
+            long leaked = allocator.getAllocatedMemory();
+            if (leaked > 0) {
+                LOG.warn("closing client with {} bytes still allocated, a FetchResult or Batch was not closed", leaked);
+            }
             allocator.close();
         }
+        LOG.debug("client closed");
     }
 
     URI tableUri(String name, String suffix) {
@@ -112,7 +124,15 @@ public final class MurrClient implements AutoCloseable {
     }
 
     <T> CompletableFuture<T> send(MurrRequest request, Function<MurrResponse, T> onSuccess) {
-        return transport.send(request).thenApplyAsync(response -> {
+        long started = System.nanoTime();
+        return transport.send(request).handleAsync((response, error) -> {
+            long ms = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started);
+            if (error != null) {
+                LOG.debug("{} {} failed after {} ms: {}", request.method(), request.uri().getPath(), ms, error.toString());
+                throw error instanceof CompletionException ce ? ce : new CompletionException(error);
+            }
+            LOG.debug("{} {} -> {} in {} ms ({} B out, {} B in)", request.method(), request.uri().getPath(),
+                    response.status(), ms, request.body().length, response.body().length);
             if (response.status() >= 400) {
                 throw Errors.fromResponse(request, response);
             }
