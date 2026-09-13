@@ -8,12 +8,10 @@ columns for a list of keys. Async, HTTP, Arrow underneath. Java 21+.
 ```xml
 <dependency>
   <groupId>io.murrdb</groupId>
-  <artifactId>murr-client</artifactId>
+  <artifactId>murrdb-java</artifactId>
   <version>0.2.2-1</version>
 </dependency>
 ```
-
-Not on Maven Central yet, so `mvn install` from a checkout for now.
 
 Arrow needs one JVM flag, otherwise the client fails on first use:
 
@@ -29,7 +27,7 @@ The client version is the murrdb version it talks to, plus a client release numb
 murrdb makes no compatibility promises before 1.0, so pin the client to the server version you run.
 A client for 0.2.2 may break against 0.2.3.
 
-| murr-client | murrdb |
+| murrdb-java | murrdb |
 |-------------|--------|
 | 0.2.2-1     | 0.2.2  |
 | 0.2.1-1     | 0.2.1  |
@@ -96,6 +94,8 @@ Scala: `IO.fromCompletableFuture(IO(table.fetch(...)))` works as is.
 - Build and test: `mvn verify`. Tests start a murr container, so Docker must be running.
 - Run one example: `mvn -q test -Dtest=ExamplesTest#quickStart`.
 - Different server image: `MURR_IMAGE=ghcr.io/murrdb/murr:0.3.0 mvn verify`.
+- Release: bump `<version>` in `pom.xml`, commit, push a matching `v<version>` tag. The
+  Release workflow signs and publishes to Maven Central.
 
 ## License
 
