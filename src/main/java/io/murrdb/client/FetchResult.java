@@ -40,22 +40,15 @@ public final class FetchResult implements AutoCloseable {
 
     private final VectorSchemaRoot root;
     private final BufferAllocator allocator;
-    private final List<String> keys;
 
-    FetchResult(VectorSchemaRoot root, BufferAllocator allocator, List<String> keys) {
+    FetchResult(VectorSchemaRoot root, BufferAllocator allocator) {
         this.root = root;
         this.allocator = allocator;
-        this.keys = List.copyOf(keys);
     }
 
-    /** Number of rows, always equal to the number of keys requested. */
+    /** Number of rows, always equal to the number of keys requested. Row {@code i} answers key {@code i}. */
     public int rowCount() {
-        return keys.size();
-    }
-
-    /** The keys as sent, in request order. Row {@code i} belongs to {@code keys().get(i)}. */
-    public List<String> keys() {
-        return keys;
+        return root.getRowCount();
     }
 
     /**
@@ -71,7 +64,7 @@ public final class FetchResult implements AutoCloseable {
         return false;
     }
 
-    /** Names of the columns in this result, in request order. The key column is never among them. */
+    /** Names of the columns in this result, in request order. Key columns are never among them. */
     public List<String> columns() {
         return root.getSchema().getFields().stream().map(f -> f.getName()).toList();
     }

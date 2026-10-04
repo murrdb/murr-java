@@ -1,6 +1,7 @@
 package io.murrdb.client;
 
 import io.murrdb.client.table.TableSchema;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.atomic.AtomicLong;
@@ -40,6 +41,11 @@ abstract class MurrTest {
 
     Table createTable(String prefix, TableSchema schema) {
         return join(client.createTable(uniqueTable(prefix), schema));
+    }
+
+    /** A request against the utf8 key column {@code id}, which most test tables use. */
+    static FetchRequest byId(List<String> keys, List<String> columns) {
+        return FetchRequest.builder().utf8("id", keys).columns(columns).build();
     }
 
     /** Waits for the future and rethrows the real cause instead of the {@code CompletionException} wrapper. */

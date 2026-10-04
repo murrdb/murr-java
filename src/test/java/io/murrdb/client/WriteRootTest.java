@@ -1,8 +1,11 @@
 package io.murrdb.client;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import io.murrdb.client.error.MurrRequestException;
+import io.murrdb.client.table.ColumnSchema;
 import io.murrdb.client.table.DType;
 import io.murrdb.client.table.TableSchema;
 import java.nio.charset.StandardCharsets;
@@ -22,6 +25,7 @@ import org.apache.arrow.vector.UInt4Vector;
 import org.apache.arrow.vector.UInt8Vector;
 import org.apache.arrow.vector.VarCharVector;
 import org.apache.arrow.vector.VectorSchemaRoot;
+import org.apache.arrow.vector.types.FloatingPointPrecision;
 import org.apache.arrow.vector.types.pojo.ArrowType;
 import org.apache.arrow.vector.types.pojo.Field;
 import org.apache.arrow.vector.types.pojo.FieldType;
@@ -106,7 +110,7 @@ class WriteRootTest extends MurrTest {
 
     @Test
     void rootColumnsMatchByNameNotPosition() {
-        TableSchema schema = TableSchema.builder().key("id").column("x", DType.INT32).column("s", DType.UTF8).build();
+        TableSchema schema = TableSchema.builder().key("id", DType.UTF8).column("x", DType.INT32).column("s", DType.UTF8).build();
         Table table = createTable("root", schema);
 
         Schema reordered = new Schema(List.of(
@@ -131,7 +135,7 @@ class WriteRootTest extends MurrTest {
             assertEquals(20, x.get(2));
         }
 
-        join(table.fetch(List.of("k2", "k0"), List.of("x", "s"), r -> {
+        join(table.fetch(byId(List.of("k2", "k0"), List.of("x", "s")), r -> {
             assertEquals(20, r.int32("x").get(0));
             assertEquals("s2", r.utf8("s").get(0));
             assertEquals(0, r.int32("x").get(1));
@@ -140,9 +144,52 @@ class WriteRootTest extends MurrTest {
         }));
     }
 
+    @Test
+    void narrowerIntegersAreWidened() {
+        TableSchema schema = TableSchema.builder().key("id", DType.UTF8).column("v", DType.INT64).build();
+        Table table = createTable("widen", schema);
+        try (VectorSchemaRoot root = castRoot(new ArrowType.Int(32, true))) {
+            ((IntVector) root.getVector("v")).setSafe(0, Integer.MIN_VALUE);
+            root.setRowCount(1);
+            join(table.write(root));
+        }
+        long stored = join(table.fetch(byId(List.of("k0"), List.of("v")), r -> r.int64("v").get(0)));
+        assertEquals(Integer.MIN_VALUE, stored);
+    }
+
+    @Test
+    void roundingCastNeedsANonStrictColumn() {
+        TableSchema strict = TableSchema.builder().key("id", DType.UTF8).column("v", DType.FLOAT32).build();
+        TableSchema relaxed = TableSchema.builder()
+                .key("id", DType.UTF8)
+                .column("v", ColumnSchema.of(DType.FLOAT32).strict(false))
+                .build();
+        Table strictTable = createTable("strict", strict);
+        Table relaxedTable = createTable("relaxed", relaxed);
+        try (VectorSchemaRoot root = castRoot(new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE))) {
+            ((Float8Vector) root.getVector("v")).setSafe(0, 1.5);
+            root.setRowCount(1);
+            assertThrows(MurrRequestException.class, () -> join(strictTable.write(root)));
+            join(relaxedTable.write(root));
+        }
+        float stored = join(relaxedTable.fetch(byId(List.of("k0"), List.of("v")), r -> r.float32("v").get(0)));
+        assertEquals(1.5f, stored);
+    }
+
+    /** A one-row root with key {@code id} = k0 and a column {@code v} of {@code type}, left for the caller to fill. */
+    private VectorSchemaRoot castRoot(ArrowType type) {
+        Schema schema = new Schema(List.of(
+                new Field("id", FieldType.notNullable(ArrowType.Utf8.INSTANCE), null),
+                new Field("v", FieldType.nullable(type), null)));
+        VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator);
+        root.allocateNew();
+        ((VarCharVector) root.getVector("id")).setSafe(0, "k0".getBytes(StandardCharsets.UTF_8));
+        return root;
+    }
+
     /** Writes rows k0 (value set by {@code fill}) and k1 (null), then fetches them in reverse order. */
     private <V extends FieldVector> void rawRoot(DType dtype, Class<V> type, Consumer<V> fill, Consumer<FetchResult> check) {
-        TableSchema schema = TableSchema.builder().key("id").column("v", dtype).build();
+        TableSchema schema = TableSchema.builder().key("id", DType.UTF8).column("v", dtype).build();
         Table table = createTable("raw_" + dtype.name().toLowerCase(), schema);
 
         try (VectorSchemaRoot root = VectorSchemaRoot.create(schema.toArrowSchema(), allocator)) {
@@ -157,7 +204,7 @@ class WriteRootTest extends MurrTest {
             join(table.write(root));
         }
 
-        join(table.fetch(List.of("k1", "k0"), List.of("v"), r -> {
+        join(table.fetch(byId(List.of("k1", "k0"), List.of("v")), r -> {
             assertTrue(r.root().getVector("v").isNull(0));
             check.accept(r);
             return null;

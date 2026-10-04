@@ -35,7 +35,7 @@ public final class JdkHttpTransport implements MurrTransport {
     @Override
     public CompletableFuture<MurrResponse> send(MurrRequest request) {
         HttpRequest.Builder b = HttpRequest.newBuilder(request.uri())
-                .timeout(requestTimeout)
+                .timeout(request.timeout() != null ? request.timeout() : requestTimeout)
                 .method(request.method(), HttpRequest.BodyPublishers.ofByteArray(request.body()));
         request.headers().forEach(b::header);
         return client.sendAsync(b.build(), HttpResponse.BodyHandlers.ofByteArray())

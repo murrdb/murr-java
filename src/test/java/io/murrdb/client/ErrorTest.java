@@ -10,8 +10,8 @@ import io.murrdb.client.error.MurrRequestException;
 import io.murrdb.client.error.NullValueException;
 import io.murrdb.client.error.TableAlreadyExistsException;
 import io.murrdb.client.error.TableNotFoundException;
+import io.murrdb.client.table.ColumnSchema;
 import io.murrdb.client.table.DType;
-import io.murrdb.client.table.Nullability;
 import io.murrdb.client.table.TableSchema;
 import java.util.Arrays;
 import java.util.List;
@@ -25,15 +25,15 @@ import org.junit.jupiter.params.provider.MethodSource;
 class ErrorTest extends MurrTest {
 
     private static final TableSchema SCHEMA = TableSchema.builder()
-            .key("id")
-            .column("x", DType.INT32, Nullability.NOT_NULL)
+            .key("id", DType.UTF8)
+            .column("x", ColumnSchema.of(DType.INT32).nullable(false))
             .column("y", DType.UTF8)
             .build();
 
     @Test
     void missingTable() {
         TableNotFoundException e = assertThrows(TableNotFoundException.class,
-                () -> join(client.table("no_such_table").fetch(List.of("k"), List.of("x"))));
+                () -> join(client.table("no_such_table").fetch(byId(List.of("k"), List.of("x")))));
         assertEquals("no_such_table", e.table());
     }
 
@@ -55,19 +55,49 @@ class ErrorTest extends MurrTest {
     @Test
     void keyColumnCannotBeFetched() {
         Table table = createTable("keyfetch", SCHEMA);
-        assertThrows(MurrRequestException.class, () -> join(table.fetch(List.of("k"), List.of("id", "x"))));
+        assertThrows(MurrRequestException.class, () -> join(table.fetch(byId(List.of("k"), List.of("id", "x")))));
     }
 
     @Test
     void unknownColumnCannotBeFetched() {
         Table table = createTable("badcol", SCHEMA);
-        assertThrows(MurrRequestException.class, () -> join(table.fetch(List.of("k"), List.of("nope"))));
+        assertThrows(MurrRequestException.class, () -> join(table.fetch(byId(List.of("k"), List.of("nope")))));
+    }
+
+    @Test
+    void fetchMustNameTheKeyColumns() {
+        Table table = createTable("badkey", SCHEMA);
+        FetchRequest wrongName = FetchRequest.builder().utf8("nope", List.of("k")).columns(List.of("x")).build();
+        assertThrows(MurrRequestException.class, () -> join(table.fetch(wrongName)));
+
+        FetchRequest extraKey = FetchRequest.builder()
+                .utf8("id", List.of("k"))
+                .int64("item", new long[] {1})
+                .columns(List.of("x"))
+                .build();
+        assertThrows(MurrRequestException.class, () -> join(table.fetch(extraKey)));
+    }
+
+    @Test
+    void fetchRequestRejectsWhatCannotBeSent() {
+        FetchRequest.Builder uneven = FetchRequest.builder().utf8("user", List.of("u1", "u2"));
+        assertThrows(IllegalArgumentException.class, () -> uneven.int64("item", new long[] {1}));
+        assertThrows(NullPointerException.class, () -> FetchRequest.builder().utf8("id", Arrays.asList("k", null)));
+        assertThrows(IllegalStateException.class, () -> FetchRequest.builder().columns(List.of("x")).build());
+        assertThrows(IllegalStateException.class, () -> FetchRequest.builder().utf8("id", List.of("k")).build());
+    }
+
+    @Test
+    void compactMissingTable() {
+        TableNotFoundException e = assertThrows(TableNotFoundException.class,
+                () -> join(client.compactTable("no_such_table")));
+        assertEquals("no_such_table", e.table());
     }
 
     @Test
     void writeWithForeignSchemaIsRejected() {
         Table table = createTable("badwrite", SCHEMA);
-        TableSchema other = TableSchema.builder().key("id").column("x", DType.UTF8).build();
+        TableSchema other = TableSchema.builder().key("id", DType.UTF8).column("x", DType.UTF8).build();
         try (Batch batch = Batch.of(other).utf8("id", List.of("k")).utf8("x", List.of("v")).build(allocator)) {
             // murr 0.2.1 answers this with a 500 from the Arrow layer rather than a 400
             assertThrows(MurrException.class, () -> join(table.write(batch)));
@@ -81,7 +111,7 @@ class ErrorTest extends MurrTest {
             join(table.write(batch));
         }
         RuntimeException e = assertThrows(RuntimeException.class,
-                () -> join(table.fetch(List.of("k"), List.of("x"), r -> {
+                () -> join(table.fetch(byId(List.of("k"), List.of("x")), r -> {
                     throw new IllegalStateException("boom");
                 })));
         assertInstanceOf(IllegalStateException.class, e);

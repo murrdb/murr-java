@@ -24,7 +24,7 @@ public final class Errors {
         return switch (response.status()) {
             case 404 -> new TableNotFoundException(tableName(request, message));
             case 409 -> new TableAlreadyExistsException(tableName(request, message));
-            case 400 -> new MurrRequestException(message);
+            case 400, 422 -> new MurrRequestException(message);
             default -> new MurrServerException(response.status(), message);
         };
     }

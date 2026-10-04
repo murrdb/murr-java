@@ -9,7 +9,7 @@ columns for a list of keys. Async, HTTP, Arrow underneath. Java 21+.
 <dependency>
   <groupId>io.murrdb</groupId>
   <artifactId>murrdb-java</artifactId>
-  <version>0.2.2-1</version>
+  <version>0.3.0-1</version>
 </dependency>
 ```
 
@@ -25,10 +25,11 @@ On JDK 24+ also add `--sun-misc-unsafe-memory-access=allow`.
 
 The client version is the murrdb version it talks to, plus a client release number after the dash.
 murrdb makes no compatibility promises before 1.0, so pin the client to the server version you run.
-A client for 0.2.2 may break against 0.2.3.
+A client for 0.3.0 may break against 0.3.1.
 
 | murrdb-java | murrdb |
 |-------------|--------|
+| 0.3.0-1     | 0.3.0  |
 | 0.2.2-1     | 0.2.2  |
 | 0.2.1-1     | 0.2.1  |
 
@@ -36,8 +37,8 @@ A client for 0.2.2 may break against 0.2.3.
 
 ```java
 var schema = TableSchema.builder()
-    .key("product_id")
-    .column("price", DType.FLOAT32, Nullability.NOT_NULL)
+    .key("product_id", DType.UTF8)
+    .column("price", ColumnSchema.of(DType.FLOAT32).nullable(false))
     .column("category", DType.UTF8)
     .build();
 
@@ -53,10 +54,17 @@ try (var client = MurrClient.builder().endpoint("http://localhost:8080").build()
     products.write(batch).join();
   }
 
+  // keys by column, like the batch; row i of the result answers key i
+  var ids = List.of("p1", "p9");
+  var request = FetchRequest.builder()
+      .utf8("product_id", ids)
+      .columns(List.of("price"))
+      .build();
+
   // this overload closes the result for you after the lambda returns
-  products.fetch(List.of("p1", "p9"), List.of("price"), result -> {
+  products.fetch(request, result -> {
     for (int i = 0; i < result.rowCount(); i++) {
-      String key = result.keys().get(i);
+      String key = ids.get(i);
       // unknown keys come back as all-null rows
       if (result.found(i)) {
         System.out.println(key + " " + result.float32("price").get(i));
@@ -77,7 +85,8 @@ p9 missing
 Complete programs, run by the test suite against a real server so they do not rot:
 
 - [`QuickStart.java`](src/test/java/io/murrdb/examples/QuickStart.java): the example above, with a second column and a not-found key.
-- [`ArrowRootWrite.java`](src/test/java/io/murrdb/examples/ArrowRootWrite.java): write a `VectorSchemaRoot` you already have, read back the raw Arrow root.
+- [`CompoundKey.java`](src/test/java/io/murrdb/examples/CompoundKey.java): a table keyed by a utf8 and an int64 column, fetched by pairs.
+- [`ArrowRootWrite.java`](src/test/java/io/murrdb/examples/ArrowRootWrite.java): write a `VectorSchemaRoot` you already have, fetch by keys held in another, read back the raw Arrow root.
 - [`ConcurrentFetch.java`](src/test/java/io/murrdb/examples/ConcurrentFetch.java): twenty fetches in flight on one client, joined with `allOf`.
 
 Scala: `IO.fromCompletableFuture(IO(table.fetch(...)))` works as is.

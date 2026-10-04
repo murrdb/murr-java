@@ -34,6 +34,7 @@ public final class MurrClient implements AutoCloseable {
     private static final Map<String, String> JSON_HEADERS = Map.of("content-type", "application/json");
 
     private final URI endpoint;
+    private final Duration compactTimeout;
     private final BufferAllocator allocator;
     private final boolean ownsAllocator;
     private final Executor executor;
@@ -42,6 +43,7 @@ public final class MurrClient implements AutoCloseable {
 
     private MurrClient(Builder b) {
         this.endpoint = b.endpoint;
+        this.compactTimeout = b.compactTimeout;
         this.ownsAllocator = b.allocator == null;
         this.allocator = ownsAllocator ? new RootAllocator() : b.allocator;
         this.ownedExecutor = b.executor == null ? Executors.newVirtualThreadPerTaskExecutor() : null;
@@ -64,6 +66,15 @@ public final class MurrClient implements AutoCloseable {
     /** Drops a table and its data. Fails with {@link TableNotFoundException} if it does not exist. */
     public CompletableFuture<Void> dropTable(String name) {
         return send(new MurrRequest("DELETE", tableUri(name, ""), Map.of(), null), r -> null);
+    }
+
+    /**
+     * Compacts a table's segments into one and completes when that is done. Waits up to
+     * {@link Builder#compactTimeout} rather than the request timeout, since a large table takes minutes.
+     * Fails with {@link TableNotFoundException} if the table does not exist.
+     */
+    public CompletableFuture<Void> compactTable(String name) {
+        return send(new MurrRequest("POST", tableUri(name, "/compact"), Map.of(), null, compactTimeout), r -> null);
     }
 
     /** Lists every table on the server with its schema. */
@@ -151,6 +162,7 @@ public final class MurrClient implements AutoCloseable {
         private URI endpoint;
         private BufferAllocator allocator;
         private Duration requestTimeout = Duration.ofSeconds(5);
+        private Duration compactTimeout = Duration.ofMinutes(10);
         private Executor executor;
         private MurrTransport transport;
 
@@ -171,6 +183,12 @@ public final class MurrClient implements AutoCloseable {
         /** Per-request timeout for the default transport. Defaults to five seconds. */
         public Builder requestTimeout(Duration timeout) {
             this.requestTimeout = Objects.requireNonNull(timeout, "timeout");
+            return this;
+        }
+
+        /** How long {@link MurrClient#compactTable} waits for the server. Defaults to ten minutes. */
+        public Builder compactTimeout(Duration timeout) {
+            this.compactTimeout = Objects.requireNonNull(timeout, "timeout");
             return this;
         }
 

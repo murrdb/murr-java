@@ -72,8 +72,8 @@ public final class Batch implements AutoCloseable {
 
     /**
      * Collects columns for a {@link Batch}. Every column must have the same length. A nullable column
-     * left out is written as all nulls; a non-nullable one left out fails {@link #build}. The key
-     * column is required and must not contain nulls.
+     * left out is written as all nulls; a non-nullable one left out fails {@link #build}. Key
+     * columns are required and must not contain nulls.
      */
     public static final class Builder {
 
@@ -91,11 +91,12 @@ public final class Batch implements AutoCloseable {
             this.schema = Objects.requireNonNull(schema, "schema");
         }
 
-        /** A {@code utf8} column. {@code null} elements are written as nulls; the key column refuses them. */
+        /** A {@code utf8} column. {@code null} elements are written as nulls; a key column refuses them. */
         public Builder utf8(String name, List<String> data) {
             // List.copyOf rejects null elements, which utf8 columns allow.
             List<String> copy = new ArrayList<>(Objects.requireNonNull(data, "data"));
-            boolean isKey = name.equals(schema.key());
+            ColumnSchema column = schema.column(name);
+            boolean isKey = column != null && column.key();
             return put(name, DType.UTF8, null, copy.size(), (v, rows) -> {
                 VarCharVector vector = (VarCharVector) v;
                 for (int i = 0; i < rows; i++) {

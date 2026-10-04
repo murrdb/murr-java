@@ -8,8 +8,8 @@ import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.utility.DockerImageName;
 
 /**
- * One murr server for the whole test JVM. The image tag follows the client version: {@code 0.2.2-1}
- * tests against {@code murr:0.2.2}. Set {@code MURR_IMAGE} to point at another image.
+ * One murr server for the whole test JVM. The image tag follows the client version: {@code 0.3.0-1}
+ * tests against {@code murr:0.3.0}. Set {@code MURR_IMAGE} to point at another image.
  */
 final class MurrContainer {
 
