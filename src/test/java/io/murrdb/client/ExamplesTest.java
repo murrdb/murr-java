@@ -1,6 +1,7 @@
 package io.murrdb.client;
 
 import io.murrdb.examples.ArrowRootWrite;
+import io.murrdb.examples.CompoundKey;
 import io.murrdb.examples.ConcurrentFetch;
 import io.murrdb.examples.QuickStart;
 import org.junit.jupiter.api.Test;
@@ -20,6 +21,11 @@ class ExamplesTest {
     @Test
     void arrowRootWrite() {
         ArrowRootWrite.main(endpoint());
+    }
+
+    @Test
+    void compoundKey() {
+        CompoundKey.main(endpoint());
     }
 
     @Test

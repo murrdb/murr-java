@@ -15,7 +15,7 @@ import org.junit.jupiter.api.Test;
 
 class ClientTest extends MurrTest {
 
-    private static final TableSchema SCHEMA = TableSchema.builder().key("id").column("x", DType.INT32).build();
+    private static final TableSchema SCHEMA = TableSchema.builder().key("id", DType.UTF8).column("x", DType.INT32).build();
 
     @Test
     void futuresCompleteOnTheClientExecutor() throws Exception {
@@ -27,7 +27,7 @@ class ClientTest extends MurrTest {
                 .executor(executor)
                 .build()) {
             String thread = join(own.table(table.name())
-                    .fetch(List.of("k"), List.of("x"), r -> Thread.currentThread().getName()));
+                    .fetch(byId(List.of("k"), List.of("x")), r -> Thread.currentThread().getName()));
             assertEquals("murr-test-executor", thread);
 
             String schemaThread = join(own.getSchema(table.name()).thenApply(s -> Thread.currentThread().getName()));
@@ -52,7 +52,7 @@ class ClientTest extends MurrTest {
         for (int i = 0; i < 64; i++) {
             int start = i * 10;
             List<String> keys = ids.subList(start, start + 10);
-            inFlight.add(table.fetch(keys, List.of("x"), r -> {
+            inFlight.add(table.fetch(byId(keys, List.of("x")), r -> {
                 int sum = 0;
                 for (int row = 0; row < r.rowCount(); row++) {
                     sum += r.int32("x").get(row);
@@ -74,7 +74,7 @@ class ClientTest extends MurrTest {
             try (Batch batch = Batch.of(SCHEMA).utf8("id", List.of("k")).int32("x", new int[] {5}).build(own.allocator())) {
                 join(own.table(table.name()).write(batch));
             }
-            try (FetchResult result = join(own.table(table.name()).fetch(List.of("k"), List.of("x")))) {
+            try (FetchResult result = join(own.table(table.name()).fetch(byId(List.of("k"), List.of("x"))))) {
                 assertEquals(5, result.int32("x").get(0));
             }
         }

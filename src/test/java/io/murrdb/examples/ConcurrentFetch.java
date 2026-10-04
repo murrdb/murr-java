@@ -1,10 +1,11 @@
 package io.murrdb.examples;
 
 import io.murrdb.client.Batch;
+import io.murrdb.client.FetchRequest;
 import io.murrdb.client.MurrClient;
 import io.murrdb.client.Table;
+import io.murrdb.client.table.ColumnSchema;
 import io.murrdb.client.table.DType;
-import io.murrdb.client.table.Nullability;
 import io.murrdb.client.table.TableSchema;
 import java.util.ArrayList;
 import java.util.List;
@@ -35,8 +36,8 @@ public final class ConcurrentFetch {
         String endpoint = args.length > 0 ? args[0] : "http://localhost:8080";
 
         TableSchema schema = TableSchema.builder()
-                .key("user_id")
-                .column("score", DType.INT32, Nullability.NOT_NULL)
+                .key("user_id", DType.UTF8)
+                .column("score", ColumnSchema.of(DType.INT32).nullable(false))
                 .build();
         List<String> users = IntStream.range(0, 1000).mapToObj(i -> "u" + i).toList();
 
@@ -51,8 +52,11 @@ public final class ConcurrentFetch {
 
             List<CompletableFuture<Long>> inFlight = new ArrayList<>();
             for (int start = 0; start < users.size(); start += 50) {
-                List<String> keys = users.subList(start, start + 50);
-                inFlight.add(scores.fetch(keys, List.of("score"), result -> {
+                FetchRequest request = FetchRequest.builder()
+                        .utf8("user_id", users.subList(start, start + 50))
+                        .columns(List.of("score"))
+                        .build();
+                inFlight.add(scores.fetch(request, result -> {
                     long sum = 0;
                     for (int row = 0; row < result.rowCount(); row++) {
                         sum += result.int32("score").get(row);

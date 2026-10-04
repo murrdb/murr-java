@@ -19,7 +19,18 @@ import java.util.Random;
 import java.util.function.Function;
 import java.util.function.UnaryOperator;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
+import org.apache.arrow.vector.IntVector;
+import org.apache.arrow.vector.VarCharVector;
+import org.apache.arrow.vector.VectorSchemaRoot;
+import org.apache.arrow.vector.types.pojo.ArrowType;
+import org.apache.arrow.vector.types.pojo.Field;
+import org.apache.arrow.vector.types.pojo.FieldType;
+import org.apache.arrow.vector.types.pojo.Schema;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 /** Every dtype goes through write, fetch and the typed column view, with a null in the middle row. */
 class RoundTripTest extends MurrTest {
@@ -144,7 +155,7 @@ class RoundTripTest extends MurrTest {
 
     @Test
     void missingKeysComeBackAsNullRows() {
-        TableSchema schema = TableSchema.builder().key("id").column("x", DType.INT32).build();
+        TableSchema schema = TableSchema.builder().key("id", DType.UTF8).column("x", DType.INT32).build();
         Table table = createTable("missing", schema);
         try (Batch batch = Batch.of(schema)
                 .utf8("id", List.of("k1", "k2"))
@@ -153,9 +164,8 @@ class RoundTripTest extends MurrTest {
             join(table.write(batch));
         }
 
-        join(table.fetch(List.of("k2", "nope", "k1"), List.of("x"), r -> {
+        join(table.fetch(byId(List.of("k2", "nope", "k1"), List.of("x")), r -> {
             assertEquals(3, r.rowCount());
-            assertEquals(List.of("k2", "nope", "k1"), r.keys());
             assertTrue(r.found(0));
             assertFalse(r.found(1));
             assertTrue(r.found(2));
@@ -167,7 +177,7 @@ class RoundTripTest extends MurrTest {
     @Test
     void columnsFollowRequestOrder() {
         TableSchema schema = TableSchema.builder()
-                .key("id")
+                .key("id", DType.UTF8)
                 .column("x", DType.INT32)
                 .column("y", DType.UTF8)
                 .column("z", DType.BOOL)
@@ -182,7 +192,7 @@ class RoundTripTest extends MurrTest {
             join(table.write(batch));
         }
 
-        join(table.fetch(List.of("k"), List.of("z", "x"), r -> {
+        join(table.fetch(byId(List.of("k"), List.of("z", "x")), r -> {
             assertEquals(List.of("z", "x"), r.columns());
             assertTrue(r.bool("z").get(0));
             assertEquals(1, r.int32("x").get(0));
@@ -192,7 +202,7 @@ class RoundTripTest extends MurrTest {
 
     @Test
     void secondWriteOverwritesTheFirst() {
-        TableSchema schema = TableSchema.builder().key("id").column("x", DType.INT32).column("y", DType.UTF8).build();
+        TableSchema schema = TableSchema.builder().key("id", DType.UTF8).column("x", DType.INT32).column("y", DType.UTF8).build();
         Table table = createTable("overwrite", schema);
         try (Batch first = Batch.of(schema)
                         .utf8("id", List.of("k"))
@@ -208,7 +218,7 @@ class RoundTripTest extends MurrTest {
             join(table.write(second));
         }
 
-        join(table.fetch(List.of("k"), List.of("x", "y"), r -> {
+        join(table.fetch(byId(List.of("k"), List.of("x", "y")), r -> {
             assertEquals(2, r.int32("x").get(0));
             assertEquals("new", r.utf8("y").get(0));
             return null;
@@ -217,7 +227,7 @@ class RoundTripTest extends MurrTest {
 
     @Test
     void largeBatchSurvivesVectorReallocation() {
-        TableSchema schema = TableSchema.builder().key("id").column("s", DType.UTF8).column("f", DType.FLOAT64).build();
+        TableSchema schema = TableSchema.builder().key("id", DType.UTF8).column("s", DType.UTF8).column("f", DType.FLOAT64).build();
         Table table = createTable("large", schema);
         int rows = 10_000;
         Random random = new Random(42);
@@ -234,7 +244,7 @@ class RoundTripTest extends MurrTest {
         }
 
         List<String> sample = IntStream.range(0, 500).map(i -> i * 20 + 7).mapToObj(i -> "key" + i).toList();
-        join(table.fetch(sample, List.of("s", "f"), r -> {
+        join(table.fetch(byId(sample, List.of("s", "f")), r -> {
             for (int i = 0; i < sample.size(); i++) {
                 int source = i * 20 + 7;
                 assertEquals(strings.get(source), r.utf8("s").get(i));
@@ -246,13 +256,13 @@ class RoundTripTest extends MurrTest {
 
     @Test
     void omittedNullableColumnReadsAsNull() {
-        TableSchema schema = TableSchema.builder().key("id").column("x", DType.INT32).column("y", DType.UTF8).build();
+        TableSchema schema = TableSchema.builder().key("id", DType.UTF8).column("x", DType.INT32).column("y", DType.UTF8).build();
         Table table = createTable("omitted", schema);
         try (Batch batch = Batch.of(schema).utf8("id", List.of("k")).int32("x", new int[] {1}).build(allocator)) {
             join(table.write(batch));
         }
 
-        join(table.fetch(List.of("k"), List.of("x", "y"), r -> {
+        join(table.fetch(byId(List.of("k"), List.of("x", "y")), r -> {
             assertTrue(r.found(0));
             assertEquals(1, r.int32("x").get(0));
             assertTrue(r.utf8("y").isNull(0));
@@ -260,15 +270,118 @@ class RoundTripTest extends MurrTest {
         }));
     }
 
+    static Stream<Arguments> integerKeys() {
+        return Stream.of(
+                keyCase(DType.INT8, b -> b.int8("id", new byte[] {1, 2}), f -> f.int8("id", new byte[] {2, 9, 1})),
+                keyCase(DType.INT16, b -> b.int16("id", new short[] {1, 2}), f -> f.int16("id", new short[] {2, 9, 1})),
+                keyCase(DType.INT32, b -> b.int32("id", new int[] {1, 2}), f -> f.int32("id", new int[] {2, 9, 1})),
+                keyCase(DType.INT64, b -> b.int64("id", new long[] {1, 2}), f -> f.int64("id", new long[] {2, 9, 1})),
+                keyCase(DType.UINT8, b -> b.uint8("id", new short[] {1, 2}), f -> f.uint8("id", new short[] {2, 9, 1})),
+                keyCase(DType.UINT16, b -> b.uint16("id", new int[] {1, 2}), f -> f.uint16("id", new int[] {2, 9, 1})),
+                keyCase(DType.UINT32, b -> b.uint32("id", new long[] {1, 2}), f -> f.uint32("id", new long[] {2, 9, 1})),
+                keyCase(DType.UINT64, b -> b.uint64("id", new long[] {1, 2}), f -> f.uint64("id", new long[] {2, 9, 1})));
+    }
+
+    private static Arguments keyCase(DType dtype, UnaryOperator<Batch.Builder> write, UnaryOperator<FetchRequest.Builder> fetch) {
+        return Arguments.of(dtype, write, fetch);
+    }
+
+    /** Rows keyed 1 and 2 are written, then 2, 9 and 1 are fetched: 9 was never written. */
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("integerKeys")
+    void integerKey(DType dtype, UnaryOperator<Batch.Builder> write, UnaryOperator<FetchRequest.Builder> fetch) {
+        TableSchema schema = TableSchema.builder().key("id", dtype).column("x", DType.INT32).build();
+        Table table = createTable("key_" + dtype.wireName(), schema);
+        try (Batch batch = write.apply(Batch.of(schema)).int32("x", new int[] {10, 20}).build(allocator)) {
+            join(table.write(batch));
+        }
+
+        FetchRequest request = fetch.apply(FetchRequest.builder()).columns(List.of("x")).build();
+        assertEquals(3, request.rowCount());
+        join(table.fetch(request, r -> {
+            assertArrayEquals(new int[] {20, -1, 10}, r.int32("x").toArray(-1));
+            return null;
+        }));
+    }
+
+    @Test
+    void compoundKey() {
+        Table table = compoundTable("compound");
+        FetchRequest request = FetchRequest.builder()
+                .utf8("user", List.of("u2", "u1", "u2"))
+                .int64("item", new long[] {1, 2, 2})
+                .columns(List.of("score"))
+                .build();
+        assertEquals(List.of("user", "item"), request.keyColumns());
+
+        // one request, sent twice: before and after compaction
+        join(table.fetch(request, RoundTripTest::assertCompoundScores));
+        join(table.compact());
+        join(table.fetch(request, RoundTripTest::assertCompoundScores));
+    }
+
+    @Test
+    void fetchByArrowRoot() {
+        Table table = compoundTable("arrow_keys");
+        // key columns in another order than the table declares them, and item as int32 where the table has int64
+        Schema keys = new Schema(List.of(
+                new Field("item", FieldType.notNullable(new ArrowType.Int(32, true)), null),
+                new Field("user", FieldType.notNullable(ArrowType.Utf8.INSTANCE), null)));
+        try (VectorSchemaRoot root = VectorSchemaRoot.create(keys, allocator)) {
+            root.allocateNew();
+            IntVector item = (IntVector) root.getVector("item");
+            VarCharVector user = (VarCharVector) root.getVector("user");
+            String[] users = {"u2", "u1", "u2"};
+            int[] items = {1, 2, 2};
+            for (int i = 0; i < 3; i++) {
+                item.setSafe(i, items[i]);
+                user.setSafe(i, users[i].getBytes(StandardCharsets.UTF_8));
+            }
+            root.setRowCount(3);
+
+            join(table.fetch(root, List.of("score"), RoundTripTest::assertCompoundScores));
+            try (FetchResult result = join(table.fetch(root, List.of("score")))) {
+                assertCompoundScores(result);
+            }
+            assertEquals(3, root.getRowCount());
+            assertEquals(2, item.get(1));
+        }
+    }
+
+    /** Rows (u1,1)=1.0, (u1,2)=2.0 and (u2,1)=3.0 under a compound key of utf8 {@code user} and int64 {@code item}. */
+    private Table compoundTable(String prefix) {
+        TableSchema schema = TableSchema.builder()
+                .key("user", DType.UTF8)
+                .key("item", DType.INT64)
+                .column("score", DType.FLOAT32)
+                .build();
+        Table table = createTable(prefix, schema);
+        try (Batch batch = Batch.of(schema)
+                .utf8("user", List.of("u1", "u1", "u2"))
+                .int64("item", new long[] {1, 2, 1})
+                .float32("score", new float[] {1f, 2f, 3f})
+                .build(allocator)) {
+            join(table.write(batch));
+        }
+        return table;
+    }
+
+    /** What fetching (u2,1), (u1,2) and the unwritten (u2,2) from {@link #compoundTable} must return. */
+    private static Void assertCompoundScores(FetchResult r) {
+        assertEquals(3, r.rowCount());
+        assertFalse(r.found(2));
+        assertArrayEquals(new float[] {3f, 2f, -1f}, r.float32("score").toArray(-1f));
+        return null;
+    }
+
     /** Table with key {@code id} and one nullable column {@code v}, three rows, then fetch in the same order. */
     private void roundTrip(DType dtype, UnaryOperator<Batch.Builder> fill, Function<FetchResult, Column> check) {
-        TableSchema schema = TableSchema.builder().key("id").column("v", dtype).build();
+        TableSchema schema = TableSchema.builder().key("id", DType.UTF8).column("v", dtype).build();
         Table table = createTable(dtype.name().toLowerCase(), schema);
         try (Batch batch = fill.apply(Batch.of(schema).utf8("id", KEYS)).build(allocator)) {
             join(table.write(batch));
         }
-        join(table.fetch(KEYS, List.of("v"), r -> {
-            assertEquals(KEYS, r.keys());
+        join(table.fetch(byId(KEYS, List.of("v")), r -> {
             Column column = check.apply(r);
             assertEquals(dtype, column.dtype());
             assertEquals(3, column.size());

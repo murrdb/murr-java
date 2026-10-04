@@ -29,6 +29,11 @@ public enum DType {
         return wireName;
     }
 
+    /** True for utf8 and the integer types, the only ones the server can look rows up by. */
+    public boolean keyable() {
+        return this != BOOL && this != FLOAT32 && this != FLOAT64;
+    }
+
     /** Parses a wire name. Throws {@link IllegalArgumentException} for anything else. */
     public static DType fromWireName(String name) {
         for (DType t : values()) {

@@ -1,10 +1,11 @@
 package io.murrdb.examples;
 
 import io.murrdb.client.Batch;
+import io.murrdb.client.FetchRequest;
 import io.murrdb.client.MurrClient;
 import io.murrdb.client.Table;
+import io.murrdb.client.table.ColumnSchema;
 import io.murrdb.client.table.DType;
-import io.murrdb.client.table.Nullability;
 import io.murrdb.client.table.TableSchema;
 import java.util.List;
 
@@ -12,11 +13,13 @@ import java.util.List;
  * The shortest useful program: create a table, write three products, read two of them back plus one
  * key that does not exist.
  *
- * <p>The schema names one utf8 key column and any number of typed columns. A {@link Batch} is built
- * from plain arrays and lists, one call per column, and becomes one segment on the server. The fetch
- * used here takes a function: the client runs it on its executor, then closes the result, so nothing
- * has to be freed by hand. A key the server does not know comes back as an all-null row, which
- * {@code found(row)} reports.
+ * <p>The schema names a key column and any number of typed columns. A {@link Batch} is built from
+ * plain arrays and lists, one call per column, and becomes one segment on the server. A
+ * {@link FetchRequest} is built the same way: the key column to look up by, then the columns to
+ * return. The fetch used here takes a function: the client runs it on its executor, then closes the
+ * result, so nothing has to be freed by hand. Row {@code i} of the result answers key {@code i} of the
+ * request, and a key the server does not know comes back as an all-null row, which {@code found(row)}
+ * reports.
  *
  * <p>{@code mvn -q test -Dtest=ExamplesTest#quickStart} runs it against a fresh server in Docker. Pass
  * the URL as the first argument to use your own server; the table is dropped at the end, so it can run
@@ -34,8 +37,8 @@ public final class QuickStart {
         String endpoint = args.length > 0 ? args[0] : "http://localhost:8080";
 
         TableSchema schema = TableSchema.builder()
-                .key("product_id")
-                .column("price", DType.FLOAT32, Nullability.NOT_NULL)
+                .key("product_id", DType.UTF8)
+                .column("price", ColumnSchema.of(DType.FLOAT32).nullable(false))
                 .column("category", DType.UTF8)
                 .build();
 
@@ -50,9 +53,14 @@ public final class QuickStart {
                 products.write(batch).join();
             }
 
-            products.fetch(List.of("p1", "p2", "p9"), List.of("price", "category"), result -> {
+            List<String> ids = List.of("p1", "p2", "p9");
+            FetchRequest request = FetchRequest.builder()
+                    .utf8("product_id", ids)
+                    .columns(List.of("price", "category"))
+                    .build();
+            products.fetch(request, result -> {
                 for (int row = 0; row < result.rowCount(); row++) {
-                    String key = result.keys().get(row);
+                    String key = ids.get(row);
                     if (result.found(row)) {
                         System.out.println(key + ": " + result.float32("price").get(row) + " " + result.utf8("category").get(row));
                     } else {

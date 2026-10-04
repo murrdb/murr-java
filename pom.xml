@@ -6,7 +6,7 @@
 
   <groupId>io.murrdb</groupId>
   <artifactId>murrdb-java</artifactId>
-  <version>0.2.2-1</version>
+  <version>0.3.0-1</version>
   <packaging>jar</packaging>
 
   <name>murrdb-java</name>
